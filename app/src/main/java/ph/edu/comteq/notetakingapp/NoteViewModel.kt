@@ -3,13 +3,40 @@ package ph.edu.comteq.notetakingapp
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.savedstate.serialization.serializers.MutableStateFlowSerializer
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private val noteDao: NoteDao = AppDatabase.getDatabase(application).noteDao()
-    val allNotes: Flow<List<Note>> = noteDao.getAllNotes()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
+    //Show all notes OR notes that match the search query
+    //val allNotes: Flow<List<Note>> = noteDao.getAllNotes()
+
+    val allNotes: Flow<List<Note>> = searchQuery.flatMapLatest { query ->
+        if (query.isEmpty()) {
+            noteDao.getAllNotes()
+        } else {
+            noteDao.searchNotes(query)
+        }
+    }
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun clearSearchQuery() {
+        _searchQuery.value = ""
+    }
+
+
 
 
 
