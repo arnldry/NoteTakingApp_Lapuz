@@ -21,7 +21,7 @@ interface NoteDao {
 
 
     @Query("SELECT * FROM notes WHERE id = :id")
-    fun getNoteById(id: Long): Note?
+    fun getNoteById(id: Int): Note?
 
     @Query("SELECT * FROM notes ORDER BY id DESC")
     fun getAllNotes(): Flow<List<Note>>
@@ -45,15 +45,22 @@ interface NoteDao {
     //get all notes with their tags
     @Transaction
     @Query("SELECT * FROM notes ORDER BY id DESC")
-    suspend fun getNotesWithTags(): Flow<List<NoteWithTags>>
+     fun getNotesWithTags(): Flow<List<NoteWithTags>>
 
     //get a note with its tags
     @Transaction
     @Query("SELECT * FROM notes WHERE id = :noteId")
-    suspend fun getNoteWithTags(noteId: Long): NoteWithTags?
+     fun getNoteWithTags(noteId: Long): NoteWithTags?
 
+     @Insert(onConflict = OnConflictStrategy.REPLACE)
+     suspend fun insertTag(tag: Tag): Long
 
+     //delete
+     @Delete
+     suspend fun deleteTag(tag: Tag)
 
+     @Query("SELECT * FROM id ORDER BY id ASC")
+     suspend fun insertTag(id: Int)
 
 
 }

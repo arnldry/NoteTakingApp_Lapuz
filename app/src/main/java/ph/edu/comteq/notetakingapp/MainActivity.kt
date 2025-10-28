@@ -44,6 +44,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import org.tensorflow.lite.support.label.Category
 import ph.edu.comteq.notetakingapp.ui.theme.NoteTakingAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -188,10 +189,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NotesListScreen(viewModel: NoteViewModel, modifier: Modifier = Modifier){
     val notes by viewModel.allNotes.collectAsState(initial = emptyList())
+    val notesWithTags by viewModel.allNotesWithTags.collectAsState(initial = emptyList())
 
     LazyColumn(modifier = modifier) {
-        items(notes) { note ->
-            NoteCard(note)
+        items(notesWithTags) { note ->
+            NoteCard(note = note.note, tags = note.tags)
 
 
         }
@@ -199,7 +201,9 @@ fun NotesListScreen(viewModel: NoteViewModel, modifier: Modifier = Modifier){
 }
 
 @Composable
-fun NoteCard(note: Note, modifier: Modifier = Modifier){
+fun NoteCard(
+    tags: List<Tag> = emptyList(),
+    note: Note, modifier: Modifier = Modifier){
     Card(modifier = Modifier
         .fillMaxWidth()
         .padding(8.dp),
@@ -215,11 +219,19 @@ fun NoteCard(note: Note, modifier: Modifier = Modifier){
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
+
+
             Text(
                 text = note.title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
+            if(tags.isEmpty()){
+                tags.forEach { tag ->
+                    Text(text = tag.name)
+                }
+
+            }
         }
     }
 }
