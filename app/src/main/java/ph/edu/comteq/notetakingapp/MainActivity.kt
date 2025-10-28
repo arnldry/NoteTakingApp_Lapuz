@@ -221,6 +221,7 @@ fun NoteCard(
             )
 
 
+
             Text(
                 text = note.title,
                 fontSize = 20.sp,
