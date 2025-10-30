@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Tag::class,
         NoteTagCrossRef::class
                ],
-        version = 1,
+        version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,7 +33,11 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE notes ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
 
                 // Update existing notes to have current time as updated_at
-                database.execSQL("UPDATE notes SET updated_at = created_at")
+                try {
+                    database.execSQL("UPDATE notes SET updated_at = created_at")
+                } catch (_: Exception) {
+                    // ignore if column doesn't exist
+                }
 
                 // Create tags table
                 database.execSQL("""

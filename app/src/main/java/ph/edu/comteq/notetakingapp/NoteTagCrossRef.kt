@@ -3,7 +3,7 @@ package ph.edu.comteq.notetakingapp
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 
-@Entity(tableName = "notes_tag_cross_ref",
+@Entity(tableName = "note_tag_cross_ref",
         primaryKeys = ["note_id", "tag_id"]
     )
 data class NoteTagCrossRef(
