@@ -27,7 +27,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         when {
             // Both search and category
             query.isNotBlank() && category != null -> {
-                // We'll need to add this query if you want both filters
+                // We'''ll need to add this query if you want both filters
                 noteDao.searchNotes(query)  // For now, just search
             }
             // Just search
@@ -71,10 +71,45 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         noteDao.insertNote(note)
     }
 
+    suspend fun insertNoteAndGetId(note: Note): Long {
+        return noteDao.insertNote(note)
+    }
+
+    fun insertNoteWithTags(note: Note, tags: List<Tag>) = viewModelScope.launch {
+        val noteId = noteDao.insertNote(note)
+        tags.forEach{ tag ->
+            addTagToNote(noteId.toInt(), tag.id)
+        }
+    }
+
     fun update(note: Note) = viewModelScope.launch {
         // Update the updatedAt timestamp
         val updatedNote = note.copy(updatedAt = System.currentTimeMillis())
         noteDao.updateNote(updatedNote)
+    }
+
+    fun updateNoteWithTags(note: Note, tags: List<Tag>) = viewModelScope.launch {
+        // First, update the note itself
+        update(note)
+
+        // Get the current tags for the note
+        val originalTags = noteDao.getNoteWithTags(note.id)?.tags ?: emptyList()
+        val originalTagIds = originalTags.map { it.id }.toSet()
+        val newTagIds = tags.map { it.id }.toSet()
+
+        // Determine which tags to add and remove
+        val tagsToAdd = newTagIds - originalTagIds
+        val tagsToRemove = originalTagIds - newTagIds
+
+        // Add the new tags
+        tagsToAdd.forEach { tagId ->
+            addTagToNote(note.id, tagId)
+        }
+
+        // Remove the old tags
+        tagsToRemove.forEach { tagId ->
+            removeTagFromNote(note.id, tagId)
+        }
     }
 
     fun delete(note: Note) = viewModelScope.launch {

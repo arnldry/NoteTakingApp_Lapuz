@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -44,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +67,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import org.tensorflow.lite.support.label.Category
+import androidx.compose.material3.*
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
+import kotlinx.coroutines.launch
 import ph.edu.comteq.notetakingapp.ui.theme.NoteTakingAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -78,15 +86,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NoteTakingAppTheme {
-                // Navigation controller - like a GPS for your app
                 val navController = rememberNavController()
 
-                // Define all the "roads" (screens) in your app
                 NavHost(
                     navController = navController,
-                    startDestination = "notes_list"  // Start here
+                    startDestination = "notes_list"
                 ) {
-                    // Main list screen
+
                     composable("notes_list") {
                         NotesListScreenWithSearch(
                             viewModel = viewModel,
@@ -98,8 +104,6 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-
-                    // Edit/Add note screen
                     composable(
                         route = "note_edit/{noteId}",
                         arguments = listOf(
@@ -132,13 +136,25 @@ class MainActivity : ComponentActivity() {
 fun NotesListScreenWithSearch(
     viewModel: NoteViewModel,
     onAddNote: () -> Unit,
-    onEditNote: (Int) -> Unit
+    onEditNote: (Int) -> Unit // NEW: Pass the edit action down
 ){
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     val notes by viewModel.allNotes.collectAsState(initial = emptyList())
     // Use notesWithTags instead of plain notes
     val notesWithTags by viewModel.allNotesWithTags.collectAsState(initial = emptyList())
+
+    val filteredNotes = if (isSearchActive) {
+        // In search mode, filter locally based on current query
+        notesWithTags.filter {
+            it.note.title.contains(searchQuery, ignoreCase = true) ||
+                    it.note.content.contains(searchQuery, ignoreCase = true) ||
+                    it.tags.any { tag -> tag.name.contains(searchQuery, ignoreCase = true) }
+        }
+    } else {
+        notesWithTags
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -156,9 +172,7 @@ fun NotesListScreenWithSearch(
                             onSearch = {},
                             expanded = true,
                             onExpandedChange = { shouldExpand ->
-                                // This is called when the system wants to change expanded state
                                 if (!shouldExpand) {
-                                    // User wants to collapse/exit search
                                     isSearchActive = false
                                     searchQuery = ""
                                     viewModel.clearSearch()
@@ -194,7 +208,6 @@ fun NotesListScreenWithSearch(
                     },
                     expanded = true,
                     onExpandedChange = { shouldExpand ->
-                        // Handle when SearchBar wants to change expanded state
                         if (!shouldExpand) {
                             isSearchActive = false
                             searchQuery = ""
@@ -207,7 +220,7 @@ fun NotesListScreenWithSearch(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp)
                     ) {
-                        if (notesWithTags.isEmpty()) {
+                        if (filteredNotes.isEmpty()) {
                             item {
                                 Text(
                                     text = "No notes found",
@@ -217,8 +230,15 @@ fun NotesListScreenWithSearch(
                                 )
                             }
                         } else {
-                            items(notesWithTags) { note ->
-                                NoteCard(note = note.note, tags = note.tags)
+                            items(
+                                items = filteredNotes,
+                                key = { noteWithTags -> noteWithTags.note.id }
+                            ) { note ->
+                                NoteCard(
+                                    note = note.note,
+                                    tags = note.tags,
+                                    onClick = { onEditNote(note.note.id) }
+                                )
                             }
                         }
                     }
@@ -242,14 +262,17 @@ fun NotesListScreenWithSearch(
         }
     ) { innerPadding ->
         NotesListScreen(
-            notes = notesWithTags,
+            notes = filteredNotes,
+            onEditNote = onEditNote,
             modifier = Modifier.padding(innerPadding)
         )
     }
 }
+
 @Composable
 fun NotesListScreen(
     notes: List<NoteWithTags>,
+    onEditNote: (Int) -> Unit, // NEW: Click handler
     modifier: Modifier = Modifier){
 
     //plain notes
@@ -257,8 +280,15 @@ fun NotesListScreen(
 
 
     LazyColumn(modifier = modifier.fillMaxWidth()) {
-        items(notes) { note ->
-            NoteCard(note = note.note, tags = note.tags)
+        items(
+            items = notes,
+            key = { noteWithTags -> noteWithTags.note.id }
+        ) { note ->
+            NoteCard(
+                note = note.note,
+                tags = note.tags,
+                onClick = { onEditNote(note.note.id) }
+            )
         }
     }
 }
@@ -266,7 +296,7 @@ fun NotesListScreen(
 @Composable
 fun NoteCard(
     note: Note,
-    tags: List<Tag> = emptyList(),  // NEW: Optional tags list
+    tags: List<Tag> = emptyList(),
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ){
@@ -278,19 +308,17 @@ fun NoteCard(
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Date and Category Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = DateUtils.formatDateTime(note.updatedAt),  // Changed to updatedAt
+                    text = DateUtils.formatDateTime(note.updatedAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
 
-                // NEW: Show category if it exists
                 if (note.category.isNotEmpty()) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -327,7 +355,7 @@ fun NoteCard(
             }
 
             // NEW: Show tags
-            if (tags.isNotEmpty()) {
+            if (note.content.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -344,7 +372,7 @@ fun NoteCard(
 @Composable
 fun TagChip(
     tag: Tag,
-    onRemove: (() -> Unit)? = null  // Optional: for removing tags
+    onRemove: (() -> Unit)? = null
 ) {
     Surface(
         color = Color(android.graphics.Color.parseColor(tag.color)).copy(alpha = 0.2f),
@@ -365,7 +393,6 @@ fun TagChip(
                 color = Color(android.graphics.Color.parseColor(tag.color))
             )
 
-            // Optional X button to remove tag
             onRemove?.let {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -383,38 +410,78 @@ fun TagChip(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteEditScreen(noteId: Int?, viewModel: NoteViewModel, onNavigateBack: () -> Unit) {
+fun NoteEditScreen(
+    noteId: Int?,
+    viewModel: NoteViewModel,
+    onNavigateBack: () -> Unit) {
 
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var selectedCategories by remember { mutableStateOf(listOf<String>()) }
     val scope = rememberCoroutineScope()
+    val tagList by viewModel.allTags.collectAsState(initial = emptyList())
+    val categoryOptions = tagList.map { it.name }.distinct()
+
+
+    LaunchedEffect(noteId) {
+        if (noteId != null) {
+            viewModel.getNoteById(noteId)?.let { note ->
+                title = note.title
+                content = note.content
+                selectedCategories = note.category.split(",").map {
+                    it.trim() }.filter { it.isNotEmpty() }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Note") },
+                title = { Text(if (noteId == null) "Add Note" else "Edit Note") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back")
                     }
                 },
                 actions = {
+                    if (noteId != null) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                viewModel.getNoteById(noteId)?.let { noteToDelete ->
+                                    viewModel.delete(noteToDelete)
+                                    onNavigateBack()
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Note")
+                        }
+                    }
+
                     IconButton(onClick = {
-                        // Create a new note
                         val noteToSave = Note(
+                            id = noteId ?: 0,
                             title = title,
-                            content = content
+                            content = content,
+                            category = selectedCategories.joinToString(","),
                         )
-                        // Insert note
-                        viewModel.insert(noteToSave)
-                        onNavigateBack()
+
+                        scope.launch {
+                            if (noteId == null) {
+                                viewModel.insert(noteToSave)
+                            } else {
+                                viewModel.update(noteToSave)
+                            }
+                            onNavigateBack()
+                        }
                     }) {
                         Icon(Icons.Default.Done, contentDescription = "Save Note")
                     }
                 }
             )
         }
-    ) { innerPadding ->
+    )  { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
@@ -428,6 +495,47 @@ fun NoteEditScreen(noteId: Int?, viewModel: NoteViewModel, onNavigateBack: () ->
                 label = { Text("Title") },
                 modifier = Modifier.fillMaxWidth()
             )
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedCategories.joinToString(", "),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                        .clickable { expanded = true }
+                )
+
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    categoryOptions.forEach { categoryName ->
+                        val isSelected = selectedCategories.contains(categoryName)
+                        DropdownMenuItem(
+                            text = { Text(categoryName) },
+                            onClick = {
+                                selectedCategories = if (isSelected) {
+                                    selectedCategories - categoryName
+                                } else {
+                                    selectedCategories + categoryName
+                                }
+                            },
+                            trailingIcon = {
+                                if (isSelected) {
+                                    Icon(Icons.Default.Check, contentDescription = "Selected")
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = content,
                 onValueChange = { content = it },
@@ -439,15 +547,3 @@ fun NoteEditScreen(noteId: Int?, viewModel: NoteViewModel, onNavigateBack: () ->
         }
     }
 }
-
-
-
-
-
-//@Preview(showBackground = true)
-//@Composable
-//fun NotesListScreenPreview() {
-//    NoteTakingAppTheme {
-//        NotesListScreen()
-//    }
-//}
